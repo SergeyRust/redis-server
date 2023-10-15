@@ -10,6 +10,6 @@ REST API для
 данных, хранящихся в redis. По ключу (path_variable <key>) добавляем/изменяем/получаем/удаяем данные,  
 согласно правилам REST API.
 
-        Запуск
+                     Запуск
 docker compose -f local.docker-compose.yaml up
 
