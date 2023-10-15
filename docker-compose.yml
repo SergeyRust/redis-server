@@ -1,0 +1,47 @@
+version: "3.7"
+
+services:
+  redis:
+    image: redis:latest
+    container_name: "redis"
+    restart: always
+    ports:
+      - "6379:6379"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=6379
+#      - REDIS_PASSWORD=my-password
+#      - REDIS_PORT=6379
+#      - REDIS_DATABASES=16
+    volumes:
+      - /root/redis/data
+      - /usr/local/etc/redis/redis.conf
+    networks:
+      - aichel-network
+
+  server:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    restart: always
+    container_name: "server"
+    volumes:
+      - ./static:/app/static
+    environment:
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    depends_on:
+      - redis
+    networks:
+      - aichel-network
+    ports:
+      - "8000:8000"
+
+volumes:
+  data:
+  static:
+    driver: local
+
+networks:
+  aichel-network:
+    driver: host

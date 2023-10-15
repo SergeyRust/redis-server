@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: aichel-server
+  name: aichel-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aichel-server
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: aichel-server
+    spec:
+      containers:
+        - image: sergeyp3d/aichel-server:v1.1
+          ports:
+            - containerPort: 8000
+#          imagePullPolicy: Never
+          name: aichel-server
+          resources: {}
+status: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aichel-server
+spec:
+  containers:
+    - name: aichel-server
+      image: sergeyp3d/aichel-server:v1.1
+      ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aichel-server
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: aichel-server
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: aichel-server
+#      nodePort: 30000
+  externalIPs:
+    - 213.171.3.236
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: aichel-server
+                port:
+                  number: 8000
+
