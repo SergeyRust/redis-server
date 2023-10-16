@@ -1,6 +1,5 @@
 #[macro_use] extern crate rocket;
 
-use std::io;
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, Value};
 use rocket::response::Responder;
 
@@ -16,13 +15,13 @@ enum RedisCommand<'c> {
     Delete { key: &'c str, },
 }
 
-fn request_redis<V: FromRedisValue>(data: RedisCommand) -> redis::RedisResult<V> {
+fn request_redis(data: RedisCommand) -> redis::RedisResult<String> {
     let client = redis::Client::open(REDIS_URL)?;
     let mut con = client.get_connection()?;
 
     match data {
         RedisCommand::Get { key } => {
-            let cached_data: V = redis::cmd(REDIS_GET).arg(&key).query(&mut con)?;
+            let cached_data = redis::cmd(REDIS_GET).arg(&key).query(&mut con)?;
             Ok(cached_data)
         },
         RedisCommand::Post { key, value } => {
@@ -31,65 +30,71 @@ fn request_redis<V: FromRedisValue>(data: RedisCommand) -> redis::RedisResult<V>
             match redis_result {
                 Ok(value) => {
                     match value {
-                        Value::Nil => Err(RedisError::from(io::Error::new(io::ErrorKind::Other, "value is already exists"))),
+                        Value::Nil => Err(RedisError::from((ErrorKind::ClientError, "value already exists"))),
                         Value::Data(_) => FromRedisValue::from_redis_value(&value),
                         _ => FromRedisValue::from_redis_value(&value),
                     }
                 }
                 Err(_) => {
-                    return Err(RedisError::from(io::Error::new(io::ErrorKind::Other, "")))
+                    return Err(RedisError::from((ErrorKind::IoError, "no connection")))
                 }
             }
         },
         RedisCommand::Put { key, value } => {
-            let redis_value: V =
+            let redis_value =
                 redis::cmd(REDIS_SET).arg(&key).arg(value).arg("XX").query(&mut con)?;
             Ok(redis_value)
         },
         RedisCommand::Delete { key } => {
-            let redis_value: V = redis::cmd(REDIS_DEL).arg(&key).query(&mut con)?;
-            Ok(redis_value)
+            let redis_value: u64 = redis::cmd(REDIS_DEL).arg(&key).query(&mut con)?;
+            match redis_value {
+                0 => {
+                    Err(RedisError::from((redis::ErrorKind::ClientError, "no such value")))
+                },
+                count if count > 0 => Ok(count.to_string()),
+                _ => Ok("".to_string()),
+            }
         },
     }
 }
 
 #[get("/get_data/<key>")]
 fn get_data<'c>(key: &'c str) -> ApiResponse {
-    match request_redis::<String>(RedisCommand::Get { key }) {
+    match request_redis(RedisCommand::Get { key }) {
         Ok(data) => ApiResponse::Ok(format!["data: {}", data]),
-        Err(e) => error(e, ApiResponse::NotFound(())),
+        Err(e) => handle_error(e, ApiResponse::NotFound(())),
     }
 }
 
 #[post("/post_data/<key>", format = "text", data = "<value>")]
 fn post_data<'c>(key: &'c str, value: &'c str) -> ApiResponse {
-    match request_redis::<()>(RedisCommand::Post { key, value }) {
+    match request_redis(RedisCommand::Post { key, value }) {
         Ok(_) => ApiResponse::Ok(format!["data with key {} successfully added", key]),
-        Err(e) => error(e, ApiResponse::Conflict(())),
+        Err(e) => handle_error(e, ApiResponse::Conflict(())),
     }
 }
 
 #[put("/put_data/<key>", format = "text", data = "<value>")]
 fn put_data<'c>(key: &'c str, value: &'c str) -> ApiResponse {
-    match request_redis::<()>(RedisCommand::Put { key, value }) {
+    match request_redis(RedisCommand::Put { key, value }) {
         Ok(_) => ApiResponse::NoContent(()),
-        Err(e) => error(e, ApiResponse::NotFound(())),
+        Err(e) => handle_error(e, ApiResponse::NotFound(())),
     }
 }
 
 #[delete("/delete_data/<key>")]
 fn delete_data<'c>(key: &'c str) -> ApiResponse {
-    match request_redis::<()>(RedisCommand::Delete { key }) {
+    match request_redis(RedisCommand::Delete { key }) {
         Ok(_) => ApiResponse::NoContent(()),
-        Err(e) => error(e, ApiResponse::NotFound(())),
+        Err(e) => handle_error(e, ApiResponse::NotFound(())),
     }
 }
 
-fn error(redis_error: RedisError, error: ApiResponse) -> ApiResponse {
-    if redis_error.kind() == ErrorKind::IoError {
+fn handle_error(error: RedisError, response: ApiResponse) -> ApiResponse {
+    if error.kind() == ErrorKind::IoError {
         return ApiResponse::InternalServerError(())
     }
-    error
+    response
 }
 
 #[derive(Responder)]

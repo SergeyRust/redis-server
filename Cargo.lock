@@ -27,14 +27,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aichel_server"
-version = "0.1.0"
-dependencies = [
- "redis",
- "rocket",
-]
-
-[[package]]
 name = "async-stream"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -828,6 +820,14 @@ dependencies = [
  "sha1_smol",
  "socket2 0.4.9",
  "url",
+]
+
+[[package]]
+name = "redis-server"
+version = "0.1.0"
+dependencies = [
+ "redis",
+ "rocket",
 ]
 
 [[package]]
